@@ -1,5 +1,5 @@
 import { apiClient } from './client';
-import { ApiResponse, Product, PaginatedResponse } from '@/types';
+import { ApiResponse, Product, ProductImage, PaginatedResponse } from '@/types';
 
 export interface CreateProductPayload {
   name: string;
@@ -11,6 +11,7 @@ export interface CreateProductPayload {
   trackInventory?: boolean;
   categoryId?: string;
   tags?: string[];
+  images?: ProductImage[];
 }
 
 export interface ProductListParams {
@@ -56,4 +57,19 @@ export const productApi = {
 
   delete: (shopId: string, productId: string) =>
     apiClient.delete(`/products/shop/${shopId}/${productId}`),
+
+  uploadImages: (shopId: string, files: File[]) => {
+    const formData = new FormData();
+    files.forEach((f) => formData.append('images', f));
+    return apiClient
+      .post<ApiResponse<{ images: Array<{ url: string; publicId: string }> }>>(
+        `/products/shop/${shopId}/images`,
+        formData,
+        // Unset Content-Type so the browser sets multipart/form-data with the
+        // correct boundary. The axios instance default of application/json would
+        // otherwise prevent multer from parsing the request body.
+        { headers: { 'Content-Type': undefined } }
+      )
+      .then((r) => r.data.data.images);
+  },
 };
