@@ -277,20 +277,37 @@ export default function SettingsPage() {
   // ── Loading skeleton ────────────────────────────────────────────────────────
   if (loadingState === 'loading') {
     return (
-      <div className="p-6 max-w-2xl space-y-6">
-        <Skeleton className="h-8 w-32" />
-        {[1, 2].map((i) => (
-          <Card key={i}>
-            <CardHeader>
-              <Skeleton className="h-5 w-28" />
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <Skeleton className="h-10 w-full" />
-              <Skeleton className="h-10 w-full" />
-              <Skeleton className="h-10 w-24" />
-            </CardContent>
-          </Card>
-        ))}
+      <div className="p-6">
+        <Skeleton className="mb-6 h-8 w-32" />
+        <div className="grid gap-6 lg:grid-cols-3">
+          <div className="space-y-6 lg:col-span-2">
+            {[1, 2].map((i) => (
+              <Card key={i}>
+                <CardHeader>
+                  <Skeleton className="h-5 w-28" />
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <Skeleton className="h-10 w-full" />
+                  <Skeleton className="h-10 w-full" />
+                  <Skeleton className="h-10 w-24" />
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+          <div className="space-y-6">
+            {[3, 4].map((i) => (
+              <Card key={i}>
+                <CardHeader>
+                  <Skeleton className="h-5 w-28" />
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <Skeleton className="h-10 w-full" />
+                  <Skeleton className="h-10 w-24" />
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
       </div>
     );
   }
@@ -317,263 +334,264 @@ export default function SettingsPage() {
     <div className="p-6">
       <h1 className="mb-6 text-2xl font-bold text-foreground">Settings</h1>
 
-      <div className="max-w-2xl space-y-6">
-        {/* ── Shop details ──────────────────────────────────────────────────── */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Shop details</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Form {...shopForm}>
-              <form
-                onSubmit={shopForm.handleSubmit(onSaveShopDetails)}
-                className="space-y-4"
-              >
-                <FormField
-                  control={shopForm.control}
-                  name="name"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Shop name</FormLabel>
-                      <FormControl>
-                        <Input placeholder="My Shop" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={shopForm.control}
-                  name="description"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Description</FormLabel>
-                      <FormControl>
-                        <textarea
-                          rows={3}
-                          placeholder="Tell customers about your shop"
-                          className={cn(
-                            'flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50'
-                          )}
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={shopForm.control}
-                  name="phone"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Phone number</FormLabel>
-                      <FormControl>
-                        <Input type="tel" placeholder="0XX XXX XXXX" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <Button type="submit" disabled={shopForm.formState.isSubmitting}>
-                  {shopForm.formState.isSubmitting ? 'Saving…' : 'Save changes'}
-                </Button>
-
-                {shopForm.formState.errors.root && (
-                  <p className="text-sm text-destructive">
-                    {shopForm.formState.errors.root.message}
-                  </p>
-                )}
-              </form>
-            </Form>
-          </CardContent>
-        </Card>
-
-        {/* ── Subscription ──────────────────────────────────────────────────── */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Subscription</CardTitle>
-            <CardDescription>
-              Your monthly platform subscription keeps your storefront active.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <SubscriptionCard
-              subscription={subscription}
-              subscribing={subscribing}
-              onSubscribe={onSubscribe}
-              onCancel={onCancelSubscription}
-            />
-          </CardContent>
-        </Card>
-
-        {/* ── Payout account ────────────────────────────────────────────────── */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Payout account</CardTitle>
-            <CardDescription>
-              Register your mobile money or bank account. Paystack will split every payment
-              automatically — your share arrives directly without waiting for manual transfers.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {subaccountCode && !payoutSaved && (
-              <div className="mb-4 rounded-md bg-green-50 px-4 py-3 text-sm text-green-800 border border-green-200">
-                Payout account registered. Your earnings are split automatically on each sale.
-              </div>
-            )}
-            {payoutSaved && (
-              <div className="mb-4 rounded-md bg-green-50 px-4 py-3 text-sm text-green-800 border border-green-200">
-                Payout account updated successfully.
-              </div>
-            )}
-            <Form {...payoutForm}>
-              <form
-                onSubmit={payoutForm.handleSubmit(onSavePayout)}
-                className="space-y-4"
-              >
-                <FormField
-                  control={payoutForm.control}
-                  name="type"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Account type</FormLabel>
-                      <Select
-                        onValueChange={(val) => {
-                          field.onChange(val);
-                          payoutForm.setValue(
-                            'bankCode',
-                            val === 'mobile_money' ? 'MTN' : ''
-                          );
-                        }}
-                        value={field.value}
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select type" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="mobile_money">Mobile Money</SelectItem>
-                          <SelectItem value="ghipss">Bank transfer (GhIPSS)</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                {payoutType === 'mobile_money' && (
+      <div className="grid gap-6 lg:grid-cols-3">
+        {/* ── Left column: primary forms ──────────────────────────────────── */}
+        <div className="space-y-6 lg:col-span-2">
+          {/* Shop details */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Shop details</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Form {...shopForm}>
+                <form
+                  onSubmit={shopForm.handleSubmit(onSaveShopDetails)}
+                  className="space-y-4"
+                >
                   <FormField
-                    control={payoutForm.control}
-                    name="bankCode"
+                    control={shopForm.control}
+                    name="name"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Network</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
+                        <FormLabel>Shop name</FormLabel>
+                        <FormControl>
+                          <Input placeholder="My Shop" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={shopForm.control}
+                    name="description"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Description</FormLabel>
+                        <FormControl>
+                          <textarea
+                            rows={3}
+                            placeholder="Tell customers about your shop"
+                            className={cn(
+                              'flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50'
+                            )}
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={shopForm.control}
+                    name="phone"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Phone number</FormLabel>
+                        <FormControl>
+                          <Input type="tel" placeholder="0XX XXX XXXX" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <Button type="submit" disabled={shopForm.formState.isSubmitting}>
+                    {shopForm.formState.isSubmitting ? 'Saving…' : 'Save changes'}
+                  </Button>
+
+                  {shopForm.formState.errors.root && (
+                    <p className="text-sm text-destructive">
+                      {shopForm.formState.errors.root.message}
+                    </p>
+                  )}
+                </form>
+              </Form>
+            </CardContent>
+          </Card>
+
+          {/* Payout account */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Payout account</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {payoutSaved && (
+                <div className="mb-4 rounded-md bg-green-50 px-4 py-3 text-sm text-green-800 border border-green-200">
+                  Payout account updated successfully.
+                </div>
+              )}
+              <Form {...payoutForm}>
+                <form
+                  onSubmit={payoutForm.handleSubmit(onSavePayout)}
+                  className="space-y-4"
+                >
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <FormField
+                      control={payoutForm.control}
+                      name="type"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Account type</FormLabel>
+                          <Select
+                            onValueChange={(val) => {
+                              field.onChange(val);
+                              payoutForm.setValue(
+                                'bankCode',
+                                val === 'mobile_money' ? 'MTN' : ''
+                              );
+                            }}
+                            value={field.value}
+                          >
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select type" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="mobile_money">Mobile Money</SelectItem>
+                              <SelectItem value="ghipss">Bank transfer (GhIPSS)</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    {payoutType === 'mobile_money' && (
+                      <FormField
+                        control={payoutForm.control}
+                        name="bankCode"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Network</FormLabel>
+                            <Select onValueChange={field.onChange} value={field.value}>
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select network" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="MTN">MTN Mobile Money</SelectItem>
+                                <SelectItem value="ATL">AirtelTigo Money</SelectItem>
+                                <SelectItem value="VOD">Vodafone Cash</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    )}
+
+                    {payoutType === 'ghipss' && (
+                      <FormField
+                        control={payoutForm.control}
+                        name="bankCode"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Bank code</FormLabel>
+                            <FormControl>
+                              <Input placeholder="e.g. GCB" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    )}
+                  </div>
+
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <FormField
+                      control={payoutForm.control}
+                      name="accountNumber"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>
+                            {payoutType === 'mobile_money' ? 'Wallet number' : 'Account number'}
+                          </FormLabel>
                           <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select network" />
-                            </SelectTrigger>
+                            <Input
+                              placeholder={
+                                payoutType === 'mobile_money' ? '0XX XXX XXXX' : 'Account number'
+                              }
+                              {...field}
+                            />
                           </FormControl>
-                          <SelectContent>
-                            <SelectItem value="MTN">MTN Mobile Money</SelectItem>
-                            <SelectItem value="ATL">AirtelTigo Money</SelectItem>
-                            <SelectItem value="VOD">Vodafone Cash</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                )}
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
 
-                {payoutType === 'ghipss' && (
-                  <FormField
-                    control={payoutForm.control}
-                    name="bankCode"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Bank code</FormLabel>
-                        <FormControl>
-                          <Input placeholder="e.g. GCB" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                )}
+                    <FormField
+                      control={payoutForm.control}
+                      name="accountName"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Account name</FormLabel>
+                          <FormControl>
+                            <Input placeholder="Full name on account" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
 
-                <FormField
-                  control={payoutForm.control}
-                  name="accountNumber"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>
-                        {payoutType === 'mobile_money' ? 'Wallet number' : 'Account number'}
-                      </FormLabel>
-                      <FormControl>
-                        <Input
-                          placeholder={
-                            payoutType === 'mobile_money' ? '0XX XXX XXXX' : 'Account number'
-                          }
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
+                  <Button type="submit" disabled={payoutForm.formState.isSubmitting}>
+                    {payoutForm.formState.isSubmitting
+                      ? 'Saving…'
+                      : subaccountCode
+                      ? 'Update payout account'
+                      : 'Register payout account'}
+                  </Button>
+
+                  {payoutForm.formState.errors.root && (
+                    <p className="text-sm text-destructive">
+                      {payoutForm.formState.errors.root.message}
+                    </p>
                   )}
-                />
+                </form>
+              </Form>
+            </CardContent>
+          </Card>
+        </div>
 
-                <FormField
-                  control={payoutForm.control}
-                  name="accountName"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Account name</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Full name on account" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+        {/* ── Right column: status & actions ──────────────────────────────── */}
+        <div className="space-y-6">
+          {/* Subscription */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Subscription</CardTitle>
+              <CardDescription>
+                Your monthly platform subscription keeps your storefront active.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <SubscriptionCard
+                subscription={subscription}
+                subscribing={subscribing}
+                onSubscribe={onSubscribe}
+                onCancel={onCancelSubscription}
+              />
+            </CardContent>
+          </Card>
 
-                <Button type="submit" disabled={payoutForm.formState.isSubmitting}>
-                  {payoutForm.formState.isSubmitting
-                    ? 'Saving…'
-                    : subaccountCode
-                    ? 'Update payout account'
-                    : 'Register payout account'}
-                </Button>
-
-                {payoutForm.formState.errors.root && (
-                  <p className="text-sm text-destructive">
-                    {payoutForm.formState.errors.root.message}
-                  </p>
-                )}
-              </form>
-            </Form>
-          </CardContent>
-        </Card>
-
-        {/* ── Danger zone ───────────────────────────────────────────────────── */}
-        <Card className="border-destructive/30">
-          <CardHeader>
-            <CardTitle className="text-base text-destructive">Danger zone</CardTitle>
-            <CardDescription>
-              Permanently delete your shop and all its data. This cannot be undone.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button variant="outline" className="border-destructive text-destructive hover:bg-destructive/10 hover:text-destructive">
-              Delete shop
-            </Button>
-          </CardContent>
-        </Card>
+          {/* Danger zone */}
+          <Card className="border-destructive/30">
+            <CardHeader>
+              <CardTitle className="text-base text-destructive">Danger zone</CardTitle>
+              <CardDescription>
+                Permanently delete your shop and all its data. This cannot be undone.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button variant="outline" className="border-destructive text-destructive hover:bg-destructive/10 hover:text-destructive">
+                Delete shop
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
   );

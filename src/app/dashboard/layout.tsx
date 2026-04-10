@@ -19,9 +19,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const pathname = usePathname();
 
   return (
-    <div className="flex min-h-screen bg-muted/30">
+    <div className="flex h-screen overflow-hidden bg-muted/30">
       {/* Desktop sidebar */}
-      <aside className="hidden w-56 flex-col border-r border-border bg-background py-6 px-4 gap-1 md:flex">
+      <aside className="hidden w-56 flex-shrink-0 flex-col border-r border-border bg-background py-6 px-4 gap-1 overflow-y-auto md:flex">
         <div className="mb-4 px-2">
           <h1 className="text-xl font-bold text-primary">Torbibi</h1>
           <p className="mt-0.5 text-xs text-muted-foreground">Shop dashboard</p>
@@ -61,8 +61,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </aside>
 
       {/* Main content */}
-      <div className="flex min-h-screen flex-1 flex-col">
-        <main className="flex-1 pb-16 md:pb-0">{children}</main>
+      <div className="flex flex-1 flex-col overflow-hidden">
+        <main className="flex-1 overflow-y-auto pb-16 md:pb-0">{children}</main>
 
         {/* Mobile bottom nav */}
         <nav className="fixed bottom-0 left-0 right-0 flex border-t border-border bg-background pb-safe md:hidden">
