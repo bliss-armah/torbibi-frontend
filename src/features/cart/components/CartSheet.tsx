@@ -22,6 +22,7 @@ interface CartSheetProps {
 export function CartSheet({ open, onOpenChange }: CartSheetProps) {
   const dispatch = useAppDispatch();
   const items = useAppSelector((s) => s.cart.items);
+  const shopSlug = useAppSelector((s) => s.cart.shopSlug);
   const total = useAppSelector(selectCartTotal);
   const itemCount = useAppSelector(selectCartItemCount);
 
@@ -105,7 +106,7 @@ export function CartSheet({ open, onOpenChange }: CartSheetProps) {
               </div>
               <p className="text-xs text-muted-foreground">Delivery fee calculated at checkout</p>
               <Button asChild className="w-full" onClick={() => onOpenChange(false)}>
-                <Link href="/checkout">Proceed to checkout</Link>
+                <Link href={shopSlug ? `/${shopSlug}/checkout` : '#'}>Proceed to checkout</Link>
               </Button>
             </div>
           </>

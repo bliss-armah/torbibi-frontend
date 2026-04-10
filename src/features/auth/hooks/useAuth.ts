@@ -14,10 +14,15 @@ export function useAuth() {
     return !result.type.endsWith('rejected');
   };
 
-  const confirmOtp = async (phone: string, code: string, type: 'login' | 'register' = 'login') => {
+  const confirmOtp = async (
+    phone: string,
+    code: string,
+    type: 'login' | 'register' = 'login',
+    redirectTo = '/dashboard',
+  ) => {
     const result = await dispatch(verifyOtp({ phone, code, type }));
     if (!result.type.endsWith('rejected')) {
-      router.push('/dashboard');
+      router.push(redirectTo);
       return true;
     }
     return false;

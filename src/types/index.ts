@@ -69,6 +69,7 @@ export interface Order {
   id: string;
   orderNumber: string;
   shopId: string;
+  shopSlug?: string | null;  // Included in buyer-facing list responses
   customerId: string;
   customerPhone: string;
   items: OrderItem[];

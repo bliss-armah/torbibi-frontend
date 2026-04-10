@@ -21,7 +21,11 @@ const phoneSchema = z.object({
 
 type PhoneFormValues = z.infer<typeof phoneSchema>;
 
-export function LoginForm({ redirectTo = '/dashboard' }: { redirectTo?: string }) {
+interface BuyerLoginFormProps {
+  redirectTo: string;
+}
+
+export function BuyerLoginForm({ redirectTo }: BuyerLoginFormProps) {
   const [step, setStep] = useState<'phone' | 'otp'>('phone');
   const [phone, setPhone] = useState('');
   const [otp, setOtp] = useState('');

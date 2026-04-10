@@ -153,7 +153,7 @@ export default async function ProductDetailPage({ params }: Props) {
           )}
 
           {/* Add to cart */}
-          <AddToCartButton product={product} disabled={isOutOfStock} />
+          <AddToCartButton product={product} shopSlug={params.shopSlug} disabled={isOutOfStock} />
 
           {/* Shop info */}
           <div className="mt-auto pt-4 border-t border-border">

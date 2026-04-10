@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { CheckCircle2, Package, Home } from 'lucide-react';
+import { CheckCircle2, Package, Home, Loader2 } from 'lucide-react';
 import { orderApi } from '@/lib/api/order.api';
 import { Order } from '@/types';
 import { formatPrice } from '@/lib/utils/format';
@@ -29,7 +29,12 @@ const PAYMENT_STATUS_LABEL: Record<string, string> = {
   refunded: 'Refunded',
 };
 
-export default function ConfirmationPage() {
+interface Props {
+  params: { shopSlug: string };
+}
+
+// Inner component — isolated so useSearchParams() is inside <Suspense>
+function ConfirmationContent({ shopSlug }: { shopSlug: string }) {
   const searchParams = useSearchParams();
   const orderId = searchParams.get('orderId');
   const orderNumber = searchParams.get('orderNumber');
@@ -39,11 +44,7 @@ export default function ConfirmationPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!orderId) {
-      setLoading(false);
-      return;
-    }
-
+    if (!orderId) { setLoading(false); return; }
     orderApi.getOne(orderId)
       .then(setOrder)
       .catch(() => setError('Could not load order details.'))
@@ -55,7 +56,7 @@ export default function ConfirmationPage() {
       <div className="max-w-lg mx-auto px-4 py-16 text-center">
         <p className="text-muted-foreground text-sm">No order found.</p>
         <Button asChild variant="outline" className="mt-4">
-          <Link href="/">Go home</Link>
+          <Link href={`/${shopSlug}`}>Back to home</Link>
         </Button>
       </div>
     );
@@ -68,9 +69,7 @@ export default function ConfirmationPage() {
         <CheckCircle2 className="h-14 w-14 text-green-500 mx-auto mb-4" />
         <h1 className="text-2xl font-bold text-foreground">Order placed!</h1>
         {orderNumber && (
-          <p className="text-sm text-muted-foreground mt-1">
-            Order #{orderNumber}
-          </p>
+          <p className="text-sm text-muted-foreground mt-1">Order #{orderNumber}</p>
         )}
         <p className="text-sm text-muted-foreground mt-2">
           The seller will confirm your order and contact you about delivery.
@@ -88,12 +87,10 @@ export default function ConfirmationPage() {
         <p className="text-sm text-muted-foreground text-center">{error}</p>
       ) : order ? (
         <div className="rounded-xl border border-border bg-card p-5 space-y-4">
-          {/* Status */}
           <div className="flex items-center justify-between">
             <span className="text-sm text-muted-foreground">Status</span>
             <Badge variant="secondary">{STATUS_LABEL[order.status] ?? order.status}</Badge>
           </div>
-
           <div className="flex items-center justify-between">
             <span className="text-sm text-muted-foreground">Payment</span>
             <Badge variant={order.paymentStatus === 'paid' ? 'default' : 'outline'}>
@@ -103,7 +100,6 @@ export default function ConfirmationPage() {
 
           <Separator />
 
-          {/* Items */}
           <div className="space-y-2">
             {order.items.map((item) => (
               <div key={item.productId} className="flex justify-between text-sm">
@@ -118,7 +114,6 @@ export default function ConfirmationPage() {
 
           <Separator />
 
-          {/* Totals */}
           <div className="space-y-1.5 text-sm">
             <div className="flex justify-between">
               <span className="text-muted-foreground">Subtotal</span>
@@ -138,23 +133,13 @@ export default function ConfirmationPage() {
 
           <Separator />
 
-          {/* Shipping address */}
           <div>
             <p className="text-sm font-medium text-foreground mb-1">Delivery to</p>
+            <p className="text-sm text-muted-foreground">{order.shippingAddress.recipientName}</p>
+            <p className="text-sm text-muted-foreground">{order.shippingAddress.phone}</p>
             <p className="text-sm text-muted-foreground">
-              {order.shippingAddress.recipientName}
-            </p>
-            <p className="text-sm text-muted-foreground">
-              {order.shippingAddress.phone}
-            </p>
-            <p className="text-sm text-muted-foreground">
-              {[
-                order.shippingAddress.area,
-                order.shippingAddress.city,
-                order.shippingAddress.region,
-              ]
-                .filter(Boolean)
-                .join(', ')}
+              {[order.shippingAddress.area, order.shippingAddress.city, order.shippingAddress.region]
+                .filter(Boolean).join(', ')}
             </p>
             {order.shippingAddress.digitalAddress && (
               <p className="text-sm text-muted-foreground">
@@ -184,12 +169,26 @@ export default function ConfirmationPage() {
           </Link>
         </Button>
         <Button asChild variant="ghost" className="gap-2">
-          <Link href="/">
+          <Link href={`/${shopSlug}`}>
             <Home className="h-4 w-4" />
             Back to home
           </Link>
         </Button>
       </div>
     </div>
+  );
+}
+
+export default function ConfirmationPage({ params }: Props) {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center py-24">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
+      }
+    >
+      <ConfirmationContent shopSlug={params.shopSlug} />
+    </Suspense>
   );
 }

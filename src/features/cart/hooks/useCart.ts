@@ -15,8 +15,8 @@ export function useCart() {
     shopId,
     total,
     itemCount,
-    addToCart: (product: Product, quantity = 1) =>
-      dispatch(addItem({ product, quantity })),
+    addToCart: (product: Product, quantity = 1, shopSlug?: string) =>
+      dispatch(addItem({ product, quantity, shopSlug })),
     removeFromCart: (productId: string) =>
       dispatch(removeItem(productId)),
     updateItemQuantity: (productId: string, quantity: number) =>

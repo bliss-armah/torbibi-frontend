@@ -3,11 +3,13 @@ import { CartItem, Product } from '@/types';
 
 interface CartState {
   shopId: string | null;    // Cart is scoped to a single shop
+  shopSlug: string | null;  // Used to link back to the shop from checkout
   items: CartItem[];
 }
 
 const initialState: CartState = {
   shopId: null,
+  shopSlug: null,
   items: [],
 };
 
@@ -15,14 +17,15 @@ const cartSlice = createSlice({
   name: 'cart',
   initialState,
   reducers: {
-    addItem(state, action: PayloadAction<{ product: Product; quantity: number }>) {
-      const { product, quantity } = action.payload;
+    addItem(state, action: PayloadAction<{ product: Product; quantity: number; shopSlug?: string }>) {
+      const { product, quantity, shopSlug } = action.payload;
 
       // Enforce single-shop cart — clear if switching shops
       if (state.shopId && state.shopId !== product.shopId) {
         state.items = [];
       }
       state.shopId = product.shopId;
+      if (shopSlug) state.shopSlug = shopSlug;
 
       const existing = state.items.find((i) => i.product.id === product.id);
       if (existing) {
@@ -47,11 +50,19 @@ const cartSlice = createSlice({
     clearCart(state) {
       state.items = [];
       state.shopId = null;
+      state.shopSlug = null;
+    },
+
+    hydrateCart(state, action: PayloadAction<CartState>) {
+      state.shopId = action.payload.shopId;
+      state.shopSlug = action.payload.shopSlug;
+      state.items = action.payload.items;
     },
   },
 });
 
-export const { addItem, removeItem, updateQuantity, clearCart } = cartSlice.actions;
+export const { addItem, removeItem, updateQuantity, clearCart, hydrateCart } = cartSlice.actions;
+export type { CartState };
 
 // Selectors
 export const selectCartTotal = (state: { cart: CartState }): number =>

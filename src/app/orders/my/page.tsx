@@ -1,12 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { Package, ChevronRight } from 'lucide-react';
+import { Package, ChevronRight, Loader2 } from 'lucide-react';
 import { orderApi } from '@/lib/api/order.api';
 import { Order } from '@/types';
 import { formatPrice } from '@/lib/utils/format';
-import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 
 const STATUS_STYLES: Record<string, string> = {
@@ -29,20 +29,39 @@ const STATUS_LABEL: Record<string, string> = {
   refunded: 'Refunded',
 };
 
-export default function MyOrdersPage() {
+function MyOrdersContent() {
+  const searchParams = useSearchParams();
+  const shopFilter = searchParams.get('shop'); // slug of the shop to filter by
+
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     orderApi.getMyOrders()
       .then((r) => setOrders(r.data))
-      .catch(() => setOrders([]))
+      .catch((err) => setError(err?.message ?? 'Failed to load orders'))
       .finally(() => setLoading(false));
   }, []);
 
+  // Filter to the specific shop if coming from a shop page
+  const displayed = shopFilter
+    ? orders.filter((o) => o.shopSlug === shopFilter)
+    : orders;
+
   return (
     <div className="max-w-2xl mx-auto px-4 py-8">
-      <h1 className="text-2xl font-bold mb-6">My orders</h1>
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl font-bold">My orders</h1>
+        {shopFilter && (
+          <Link
+            href={`/${shopFilter}`}
+            className="text-sm text-primary hover:underline"
+          >
+            ← Back to shop
+          </Link>
+        )}
+      </div>
 
       {loading ? (
         <div className="space-y-3">
@@ -54,21 +73,34 @@ export default function MyOrdersPage() {
             </div>
           ))}
         </div>
-      ) : orders.length === 0 ? (
+      ) : error ? (
+        <div className="text-center py-16">
+          <p className="text-sm text-destructive mb-4">{error}</p>
+          <button onClick={() => window.history.back()} className="text-sm text-primary hover:underline">
+            Go back
+          </button>
+        </div>
+      ) : displayed.length === 0 ? (
         <div className="text-center py-16">
           <Package className="h-12 w-12 text-muted-foreground/40 mx-auto mb-4" />
           <h2 className="text-base font-semibold mb-1">No orders yet</h2>
-          <p className="text-sm text-muted-foreground mb-6">Your past orders will appear here.</p>
-          <Link href="/" className="text-sm text-primary hover:underline">
-            Browse shops
-          </Link>
+          <p className="text-sm text-muted-foreground mb-6">
+            {shopFilter
+              ? "You haven't placed any orders at this shop yet."
+              : 'Your past orders will appear here.'}
+          </p>
+          {shopFilter && (
+            <Link href={`/${shopFilter}`} className="text-sm text-primary hover:underline">
+              Browse the shop
+            </Link>
+          )}
         </div>
       ) : (
         <div className="space-y-3">
-          {orders.map((order) => (
+          {displayed.map((order) => (
             <Link
               key={order.id}
-              href={`/checkout/confirmation?orderId=${order.id}&orderNumber=${order.orderNumber}`}
+              href={`/orders/${order.id}${order.shopSlug ? `?shop=${order.shopSlug}` : ''}`}
               className="flex items-center gap-4 rounded-xl border border-border bg-card p-4 hover:shadow-sm transition-shadow"
             >
               <div className="flex-1 min-w-0">
@@ -91,5 +123,19 @@ export default function MyOrdersPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function MyOrdersPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center py-24">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
+      }
+    >
+      <MyOrdersContent />
+    </Suspense>
   );
 }

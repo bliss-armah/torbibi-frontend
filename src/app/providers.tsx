@@ -4,13 +4,11 @@ import { useEffect } from 'react';
 import { Provider } from 'react-redux';
 import { store } from '@/store';
 import { setCredentials } from '@/store/slices/authSlice';
+import { hydrateCart, CartState } from '@/store/slices/cartSlice';
 import type { User } from '@/types';
 
-/**
- * Reads accessToken + user from localStorage on first mount and rehydrates
- * the Redux auth slice. Without this, a page refresh would wipe the auth state
- * even though the cookie (used by middleware) and localStorage token are still valid.
- */
+const CART_STORAGE_KEY = 'torbibi_cart';
+
 function AuthRehydrator({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const token = localStorage.getItem('accessToken');
@@ -18,10 +16,8 @@ function AuthRehydrator({ children }: { children: React.ReactNode }) {
     if (!token || !userRaw) return;
 
     try {
-      // Decode JWT payload (no signature verification — backend validates on every API call)
       const payload = JSON.parse(atob(token.split('.')[1]));
       if (payload.exp * 1000 < Date.now()) {
-        // Token expired — clean up everything
         localStorage.removeItem('accessToken');
         localStorage.removeItem('refreshToken');
         localStorage.removeItem('user');
@@ -38,8 +34,39 @@ function AuthRehydrator({ children }: { children: React.ReactNode }) {
         })
       );
     } catch {
-      // Malformed token or user JSON — leave state empty, middleware will guard routes
+      // Malformed token — leave auth empty, middleware guards routes
     }
+  }, []);
+
+  return <>{children}</>;
+}
+
+function CartRehydrator({ children }: { children: React.ReactNode }) {
+  useEffect(() => {
+    // Restore cart from localStorage on mount
+    try {
+      const raw = localStorage.getItem(CART_STORAGE_KEY);
+      if (raw) {
+        const saved: CartState = JSON.parse(raw);
+        if (Array.isArray(saved.items)) {
+          store.dispatch(hydrateCart(saved));
+        }
+      }
+    } catch {
+      // Corrupt storage — ignore, start with empty cart
+    }
+
+    // Subscribe to store changes and persist cart state
+    const unsubscribe = store.subscribe(() => {
+      try {
+        const cart = store.getState().cart;
+        localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cart));
+      } catch {
+        // Storage full or unavailable — fail silently
+      }
+    });
+
+    return unsubscribe;
   }, []);
 
   return <>{children}</>;
@@ -48,7 +75,11 @@ function AuthRehydrator({ children }: { children: React.ReactNode }) {
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <Provider store={store}>
-      <AuthRehydrator>{children}</AuthRehydrator>
+      <AuthRehydrator>
+        <CartRehydrator>
+          {children}
+        </CartRehydrator>
+      </AuthRehydrator>
     </Provider>
   );
 }

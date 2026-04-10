@@ -1,6 +1,11 @@
 import { apiClient } from './client';
 import { ApiResponse, Shop, PaginatedResponse } from '@/types';
 
+export interface PublicShopsParams {
+  page?: number;
+  limit?: number;
+}
+
 export interface CreateShopPayload {
   name: string;
   description?: string;
@@ -15,6 +20,11 @@ export interface CreateShopPayload {
 }
 
 export const shopApi = {
+  listPublic: (params?: PublicShopsParams) =>
+    apiClient
+      .get<ApiResponse<PaginatedResponse<Shop>>>('/shops', { params })
+      .then((r) => r.data.data),
+
   create: (payload: CreateShopPayload) =>
     apiClient
       .post<ApiResponse<{ shop: Shop }>>('/shops', payload)

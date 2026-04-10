@@ -8,10 +8,11 @@ import { Button } from '@/components/ui/Button';
 
 interface AddToCartButtonProps {
   product: Product;
+  shopSlug: string;
   disabled?: boolean;
 }
 
-export function AddToCartButton({ product, disabled }: AddToCartButtonProps) {
+export function AddToCartButton({ product, shopSlug, disabled }: AddToCartButtonProps) {
   const [quantity, setQuantity] = useState(1);
   const [added, setAdded] = useState(false);
   const { addToCart } = useCart();
@@ -19,7 +20,7 @@ export function AddToCartButton({ product, disabled }: AddToCartButtonProps) {
   const maxQty = product.trackInventory ? product.quantity : 99;
 
   function handleAdd() {
-    addToCart(product, quantity);
+    addToCart(product, quantity, shopSlug);
     setAdded(true);
     setTimeout(() => setAdded(false), 2000);
   }
