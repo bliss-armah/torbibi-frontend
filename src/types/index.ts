@@ -35,6 +35,7 @@ export interface ShopAddress {
 
 export interface ProductImage {
   url: string;
+  publicId?: string; // Cloudinary public_id — stored so removed images can be deleted
   alt: string;
   isPrimary: boolean;
 }

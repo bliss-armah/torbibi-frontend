@@ -1,12 +1,12 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { ImagePlus, X, Star } from 'lucide-react';
 import { productApi } from '@/lib/api/product.api';
-import { Product } from '@/types';
+import { Product, ProductImage } from '@/types';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Label } from '@/components/ui/label';
@@ -27,6 +27,13 @@ import {
   FormMessage,
   FormDescription,
 } from '@/components/ui/form';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 
 // ─── Schema ───────────────────────────────────────────────────────────────────
@@ -52,11 +59,13 @@ const schema = z
       .default(0),
     trackInventory: z.boolean().default(false),
     tags: z.string().optional(),
+    // Only used in edit mode — ignored in create (publishImmediately used instead)
+    status: z.enum(['active', 'draft', 'archived']).optional(),
     publishImmediately: z.boolean().default(false),
   })
   .refine(
     (d) => {
-      if (!d.compareAtPriceGhs || d.compareAtPriceGhs === '') return true;
+      if (!d.compareAtPriceGhs || String(d.compareAtPriceGhs) === '') return true;
       return Number(d.compareAtPriceGhs) > d.priceGhs;
     },
     {
@@ -69,7 +78,8 @@ type FormValues = z.infer<typeof schema>;
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const MAX_IMAGE_BYTES = 1024 * 1024; // 1 MB — matches backend MAX_IMAGE_SIZE_BYTES
+const MAX_IMAGES = 5;
+const MAX_IMAGE_BYTES = 1024 * 1024; // 1 MB
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -77,9 +87,16 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-// ─── Image item ───────────────────────────────────────────────────────────────
+// ─── Image state types ────────────────────────────────────────────────────────
 
-interface ImageItem {
+/** An existing image on the product — can be marked for removal */
+interface ExistingImageItem {
+  image: ProductImage;
+  kept: boolean;
+}
+
+/** A newly selected local file — to be uploaded on submit */
+interface NewImageItem {
   file: File;
   previewUrl: string;
   tooLarge: boolean;
@@ -90,15 +107,26 @@ interface ImageItem {
 interface AddProductDialogProps {
   open: boolean;
   shopId: string;
+  /** When provided the dialog operates in edit mode; absent = create mode */
+  product?: Product;
   onOpenChange: (open: boolean) => void;
   onSuccess: (product: Product) => void;
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function AddProductDialog({ open, shopId, onOpenChange, onSuccess }: AddProductDialogProps) {
+export function AddProductDialog({
+  open,
+  shopId,
+  product,
+  onOpenChange,
+  onSuccess,
+}: AddProductDialogProps) {
+  const isEditMode = !!product;
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [imageItems, setImageItems] = useState<ImageItem[]>([]);
+
+  const [existingItems, setExistingItems] = useState<ExistingImageItem[]>([]);
+  const [newImageItems, setNewImageItems] = useState<NewImageItem[]>([]);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -111,98 +139,168 @@ export function AddProductDialog({ open, shopId, onOpenChange, onSuccess }: AddP
       quantity: 0,
       trackInventory: false,
       tags: '',
+      status: 'draft',
       publishImmediately: false,
     },
   });
 
+  // Populate form and image state when dialog opens
+  useEffect(() => {
+    if (open && product) {
+      form.reset({
+        name: product.name,
+        description: product.description ?? '',
+        priceGhs: product.price / 100,
+        compareAtPriceGhs: product.compareAtPrice ? product.compareAtPrice / 100 : '',
+        sku: product.sku ?? '',
+        quantity: product.quantity,
+        trackInventory: product.trackInventory,
+        tags: product.tags.join(', '),
+        status: product.status,
+        publishImmediately: false,
+      });
+      setExistingItems(product.images.map((image) => ({ image, kept: true })));
+      setNewImageItems([]);
+    } else if (open && !product) {
+      form.reset({
+        name: '',
+        description: '',
+        priceGhs: '' as unknown as number,
+        compareAtPriceGhs: '',
+        sku: '',
+        quantity: 0,
+        trackInventory: false,
+        tags: '',
+        status: 'draft',
+        publishImmediately: false,
+      });
+      setExistingItems([]);
+      setNewImageItems([]);
+    }
+  }, [open, product, form]);
+
   function handleOpenChange(next: boolean) {
     if (!next) {
-      imageItems.forEach((img) => URL.revokeObjectURL(img.previewUrl));
-      setImageItems([]);
+      newImageItems.forEach((img) => URL.revokeObjectURL(img.previewUrl));
+      setNewImageItems([]);
+      setExistingItems([]);
       form.reset();
     }
     onOpenChange(next);
   }
 
+  const keptCount = existingItems.filter((e) => e.kept).length;
+  const totalImageCount = keptCount + newImageItems.length;
+  const remainingSlots = MAX_IMAGES - totalImageCount;
+
   function handleFilesSelected(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? []);
-    const remaining = 5 - imageItems.length;
-    const toAdd = files.slice(0, remaining).map((file) => ({
+    const toAdd = files.slice(0, remainingSlots).map((file) => ({
       file,
       previewUrl: URL.createObjectURL(file),
       tooLarge: file.size > MAX_IMAGE_BYTES,
     }));
-    setImageItems((prev) => [...prev, ...toAdd]);
+    setNewImageItems((prev) => [...prev, ...toAdd]);
     e.target.value = '';
   }
 
-  function removeImage(index: number) {
-    URL.revokeObjectURL(imageItems[index].previewUrl);
-    setImageItems((prev) => prev.filter((_, i) => i !== index));
+  function removeExisting(index: number) {
+    setExistingItems((prev) =>
+      prev.map((item, i) => (i === index ? { ...item, kept: false } : item))
+    );
+  }
+
+  function restoreExisting(index: number) {
+    if (totalImageCount >= MAX_IMAGES) return; // already at limit
+    setExistingItems((prev) =>
+      prev.map((item, i) => (i === index ? { ...item, kept: true } : item))
+    );
+  }
+
+  function removeNew(index: number) {
+    URL.revokeObjectURL(newImageItems[index].previewUrl);
+    setNewImageItems((prev) => prev.filter((_, i) => i !== index));
   }
 
   async function onSubmit(values: FormValues) {
     try {
-      // 1. Upload images if any
-      let images: Array<{ url: string; alt: string; isPrimary: boolean }> = [];
-      if (imageItems.length > 0) {
-        const uploaded = await productApi.uploadImages(
-          shopId,
-          imageItems.map((i) => i.file)
-        );
-        images = uploaded.map((u, idx) => ({
-          url: u.url,
-          alt: values.name,
-          isPrimary: idx === 0,
-        }));
+      // 1. Upload any new files
+      let uploaded: Array<{ url: string; publicId: string }> = [];
+      const validNew = newImageItems.filter((i) => !i.tooLarge);
+      if (validNew.length > 0) {
+        uploaded = await productApi.uploadImages(shopId, validNew.map((i) => i.file));
       }
 
-      // 2. Create product
-      let product = await productApi.create(shopId, {
+      // 2. Build final images array: kept existing first, then newly uploaded
+      const keptImages = existingItems.filter((e) => e.kept).map((e) => e.image);
+      const freshImages = uploaded.map((u, i) => ({
+        url: u.url,
+        publicId: u.publicId,
+        alt: values.name,
+        isPrimary: keptImages.length === 0 && i === 0,
+      }));
+      const finalImages: ProductImage[] = [...keptImages, ...freshImages];
+      // Ensure the first image is always primary
+      if (finalImages.length > 0) {
+        finalImages.forEach((img, i) => { img.isPrimary = i === 0; });
+      }
+
+      const payload = {
         name: values.name,
         description: values.description || undefined,
         price: Math.round(values.priceGhs * 100),
         compareAtPrice:
-          values.compareAtPriceGhs && values.compareAtPriceGhs !== ''
+          values.compareAtPriceGhs && String(values.compareAtPriceGhs) !== ''
             ? Math.round(Number(values.compareAtPriceGhs) * 100)
             : undefined,
         sku: values.sku || undefined,
         quantity: values.quantity,
         trackInventory: values.trackInventory,
         tags: values.tags
-          ? values.tags
-              .split(',')
-              .map((t) => t.trim())
-              .filter(Boolean)
+          ? values.tags.split(',').map((t) => t.trim()).filter(Boolean)
           : [],
-        images,
-      });
+        images: finalImages,
+      };
 
-      // 3. Publish if requested
-      if (values.publishImmediately) {
-        product = await productApi.updateStatus(shopId, product.id, 'active');
+      if (isEditMode) {
+        // 3a. Edit mode: update product then set status if changed
+        let updated = await productApi.update(shopId, product!.id, payload);
+        if (values.status && values.status !== product!.status) {
+          updated = await productApi.updateStatus(shopId, product!.id, values.status);
+        }
+        handleOpenChange(false);
+        onSuccess(updated);
+      } else {
+        // 3b. Create mode: create then optionally publish
+        let created = await productApi.create(shopId, payload);
+        if (values.publishImmediately) {
+          created = await productApi.updateStatus(shopId, created.id, 'active');
+        }
+        handleOpenChange(false);
+        onSuccess(created);
       }
-
-      handleOpenChange(false);
-      onSuccess(product);
     } catch (err: unknown) {
-      const msg = (err as { message?: string })?.message ?? 'Failed to create product.';
+      const msg =
+        (err as { message?: string })?.message ??
+        (isEditMode ? 'Failed to update product.' : 'Failed to create product.');
       form.setError('root', { message: msg });
     }
   }
 
+  const hasOversizedImages = newImageItems.some((i) => i.tooLarge);
   const publishImmediately = form.watch('publishImmediately');
-  const hasOversizedImages = imageItems.some((i) => i.tooLarge);
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Add product</DialogTitle>
-          <DialogDescription>
-            Prices are in Ghana Cedis (GHS). Images are uploaded to Cloudinary (JPEG, PNG, WebP —
-            max 1 MB each, up to 5).
-          </DialogDescription>
+          <DialogTitle>{isEditMode ? 'Edit product' : 'Add product'}</DialogTitle>
+          {!isEditMode && (
+            <DialogDescription>
+              Prices are in Ghana Cedis (GHS). Images are uploaded to Cloudinary (JPEG, PNG, WebP —
+              max 1 MB each, up to 5).
+            </DialogDescription>
+          )}
         </DialogHeader>
 
         <Form {...form}>
@@ -213,7 +311,53 @@ export function AddProductDialog({ open, shopId, onOpenChange, onSuccess }: AddP
               <Label>Product images</Label>
 
               <div className="grid grid-cols-3 gap-2">
-                {imageItems.map((img, idx) => (
+                {/* Existing images (edit mode) */}
+                {existingItems.map((item, idx) => (
+                  <div
+                    key={`existing-${idx}`}
+                    className={cn(
+                      'relative aspect-square rounded-md overflow-hidden border bg-muted',
+                      !item.kept ? 'opacity-40 border-dashed border-muted-foreground' : 'border-border'
+                    )}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={item.image.url}
+                      alt={item.image.alt}
+                      className="h-full w-full object-cover"
+                    />
+
+                    {/* Primary badge */}
+                    {item.kept && idx === 0 && existingItems.filter(e => e.kept).indexOf(item) === 0 && (
+                      <span className="absolute top-1 left-1 flex items-center gap-0.5 rounded bg-black/60 px-1.5 py-0.5 text-[10px] text-white">
+                        <Star className="h-2.5 w-2.5 fill-yellow-400 text-yellow-400" />
+                        Primary
+                      </span>
+                    )}
+
+                    {item.kept ? (
+                      <button
+                        type="button"
+                        onClick={() => removeExisting(idx)}
+                        className="absolute right-1 top-1 rounded-full bg-black/60 p-0.5 text-white hover:bg-black/80 transition-colors"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => restoreExisting(idx)}
+                        disabled={totalImageCount >= MAX_IMAGES}
+                        className="absolute inset-0 flex items-center justify-center text-[10px] font-medium text-foreground bg-background/70 hover:bg-background/90 transition-colors disabled:cursor-not-allowed"
+                      >
+                        Restore
+                      </button>
+                    )}
+                  </div>
+                ))}
+
+                {/* New image previews */}
+                {newImageItems.map((img, idx) => (
                   <div
                     key={img.previewUrl}
                     className={cn(
@@ -224,34 +368,30 @@ export function AddProductDialog({ open, shopId, onOpenChange, onSuccess }: AddP
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={img.previewUrl}
-                      alt={`preview ${idx + 1}`}
+                      alt={`new preview ${idx + 1}`}
                       className={cn('h-full w-full object-cover', img.tooLarge && 'opacity-50')}
                     />
 
-                    {/* File size badge */}
-                    <span
-                      className={cn(
-                        'absolute bottom-1 left-1 rounded px-1.5 py-0.5 text-[10px] font-medium',
-                        img.tooLarge
-                          ? 'bg-destructive text-white'
-                          : 'bg-black/60 text-white'
-                      )}
-                    >
-                      {img.tooLarge ? '⚠ ' : ''}{formatBytes(img.file.size)}
-                    </span>
-
-                    {/* Primary badge */}
-                    {idx === 0 && !img.tooLarge && (
+                    {/* Primary badge for first new image when no existing images are kept */}
+                    {keptCount === 0 && idx === 0 && !img.tooLarge && (
                       <span className="absolute top-1 left-1 flex items-center gap-0.5 rounded bg-black/60 px-1.5 py-0.5 text-[10px] text-white">
                         <Star className="h-2.5 w-2.5 fill-yellow-400 text-yellow-400" />
                         Primary
                       </span>
                     )}
 
-                    {/* Remove button */}
+                    <span
+                      className={cn(
+                        'absolute bottom-1 left-1 rounded px-1.5 py-0.5 text-[10px] font-medium',
+                        img.tooLarge ? 'bg-destructive text-white' : 'bg-black/60 text-white'
+                      )}
+                    >
+                      {img.tooLarge ? '⚠ ' : ''}{formatBytes(img.file.size)}
+                    </span>
+
                     <button
                       type="button"
-                      onClick={() => removeImage(idx)}
+                      onClick={() => removeNew(idx)}
                       className="absolute right-1 top-1 rounded-full bg-black/60 p-0.5 text-white hover:bg-black/80 transition-colors"
                     >
                       <X className="h-3 w-3" />
@@ -260,18 +400,18 @@ export function AddProductDialog({ open, shopId, onOpenChange, onSuccess }: AddP
                 ))}
 
                 {/* Add more slot */}
-                {imageItems.length < 5 && (
+                {remainingSlots > 0 && (
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
                     className={cn(
                       'flex aspect-square flex-col items-center justify-center gap-1.5 rounded-md border-2 border-dashed border-border bg-muted/40 text-muted-foreground transition-colors hover:border-primary/50 hover:bg-muted/60',
-                      imageItems.length === 0 && 'col-span-3 aspect-auto py-8'
+                      totalImageCount === 0 && 'col-span-3 aspect-auto py-8'
                     )}
                   >
                     <ImagePlus className="h-5 w-5" />
                     <span className="text-xs">
-                      {imageItems.length === 0 ? 'Add images' : 'Add more'}
+                      {totalImageCount === 0 ? 'Add images' : 'Add more'}
                     </span>
                   </button>
                 )}
@@ -286,11 +426,11 @@ export function AddProductDialog({ open, shopId, onOpenChange, onSuccess }: AddP
                 onChange={handleFilesSelected}
               />
 
-              {imageItems.some((i) => i.tooLarge) ? (
+              {hasOversizedImages ? (
                 <p className="text-xs text-destructive">
                   Some images exceed the 1 MB limit. Remove them before submitting.
                 </p>
-              ) : imageItems.length > 0 ? (
+              ) : totalImageCount > 0 ? (
                 <p className="text-xs text-muted-foreground">
                   First image is the primary thumbnail. Max 1 MB per image.
                 </p>
@@ -385,7 +525,7 @@ export function AddProductDialog({ open, shopId, onOpenChange, onSuccess }: AddP
                         />
                       </div>
                     </FormControl>
-                    <FormDescription>Shown as strikethrough "was" price</FormDescription>
+                    <FormDescription>Shown as strikethrough &quot;was&quot; price</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -466,49 +606,77 @@ export function AddProductDialog({ open, shopId, onOpenChange, onSuccess }: AddP
               )}
             />
 
+            {/* ── Status (edit mode only) ───────────────────────────────────── */}
+            {isEditMode && (
+              <FormField
+                control={form.control}
+                name="status"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Status</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select status" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="active">Active — visible to buyers</SelectItem>
+                        <SelectItem value="draft">Draft — hidden from buyers</SelectItem>
+                        <SelectItem value="archived">Archived</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
+
             {form.formState.errors.root && (
               <p className="text-sm text-destructive">{form.formState.errors.root.message}</p>
             )}
 
             {/* ── Footer ────────────────────────────────────────────────────── */}
             <DialogFooter className="flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              {/* Publish toggle */}
-              <FormField
-                control={form.control}
-                name="publishImmediately"
-                render={({ field }) => (
-                  <div className="flex items-center gap-2">
-                    <input
-                      id="publishImmediately"
-                      type="checkbox"
-                      checked={field.value}
-                      onChange={field.onChange}
-                      className="h-4 w-4 rounded border-input accent-primary cursor-pointer"
-                    />
-                    <Label htmlFor="publishImmediately" className="cursor-pointer text-sm font-normal">
-                      Publish immediately
-                    </Label>
-                  </div>
-                )}
-              />
+              {/* Publish toggle (create mode only) */}
+              {!isEditMode && (
+                <FormField
+                  control={form.control}
+                  name="publishImmediately"
+                  render={({ field }) => (
+                    <div className="flex items-center gap-2">
+                      <input
+                        id="publishImmediately"
+                        type="checkbox"
+                        checked={field.value}
+                        onChange={field.onChange}
+                        className="h-4 w-4 rounded border-input accent-primary cursor-pointer"
+                      />
+                      <Label htmlFor="publishImmediately" className="cursor-pointer text-sm font-normal">
+                        Publish immediately
+                      </Label>
+                    </div>
+                  )}
+                />
+              )}
 
-              <div className="flex gap-2">
+              <div className="flex gap-2 sm:ml-auto">
+                {isEditMode && (
+                  <Button type="button" variant="outline" onClick={() => handleOpenChange(false)}>
+                    Cancel
+                  </Button>
+                )}
                 <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => handleOpenChange(false)}
-                  disabled={form.formState.isSubmitting}
+                  type="submit"
+                  disabled={form.formState.isSubmitting || hasOversizedImages}
                 >
-                  Cancel
-                </Button>
-                <Button type="submit" disabled={form.formState.isSubmitting || hasOversizedImages}>
                   {form.formState.isSubmitting
-                    ? publishImmediately
-                      ? 'Publishing…'
-                      : 'Adding…'
+                    ? isEditMode ? 'Saving…' : 'Creating…'
+                    : isEditMode
+                    ? 'Save changes'
                     : publishImmediately
-                    ? 'Add & publish'
-                    : 'Add as draft'}
+                    ? 'Create & publish'
+                    : 'Create product'}
                 </Button>
               </div>
             </DialogFooter>
