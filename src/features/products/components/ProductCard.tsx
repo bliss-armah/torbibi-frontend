@@ -15,7 +15,7 @@ export function ProductCard({ product, shopSlug }: ProductCardProps) {
 
   return (
     <Link
-      href={`/${shopSlug}/products/${product.slug}`}
+    href={`/${shopSlug}/products/${product.id}`}
       className="group flex flex-col overflow-hidden rounded-xl border border-border bg-card shadow-sm transition-shadow duration-200 hover:shadow-md"
     >
       <div className="relative aspect-square overflow-hidden bg-muted">
