@@ -1,11 +1,12 @@
 import { apiClient } from './client';
-import { ApiResponse, Order, PaginatedResponse, ShippingAddress } from '@/types';
+import { ApiResponse, DeliveryInfo, Order, PaginatedResponse, ShippingAddress } from '@/types';
 
 export interface CreateOrderPayload {
   items: { productId: string; quantity: number }[];
   shippingAddress: ShippingAddress;
   deliveryFee?: number;
   notes?: string;
+  email?: string;
 }
 
 export const orderApi = {
@@ -29,8 +30,25 @@ export const orderApi = {
       .get<ApiResponse<PaginatedResponse<Order>>>(`/orders/shop/${shopId}/list`, { params })
       .then((r) => r.data.data),
 
-  updateStatus: (shopId: string, orderId: string, status: string, cancelReason?: string) =>
+  updateStatus: (
+    shopId: string,
+    orderId: string,
+    status: string,
+    cancelReason?: string,
+    deliveryInfo?: DeliveryInfo
+  ) =>
     apiClient
-      .patch<ApiResponse<{ order: Order }>>(`/orders/shop/${shopId}/${orderId}/status`, { status, cancelReason })
+      .patch<ApiResponse<{ order: Order }>>(`/orders/shop/${shopId}/${orderId}/status`, {
+        status,
+        cancelReason,
+        deliveryInfo,
+      })
+      .then((r) => r.data.data.order),
+
+  verifyPayment: (orderId: string, reference: string) =>
+    apiClient
+      .post<ApiResponse<{ order: Order }>>(`/orders/${orderId}/verify-payment`, {}, {
+        params: { reference },
+      })
       .then((r) => r.data.data.order),
 };

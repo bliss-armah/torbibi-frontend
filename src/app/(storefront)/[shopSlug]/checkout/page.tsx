@@ -42,6 +42,7 @@ const GHANA_REGIONS = [
 const shippingSchema = z.object({
   recipientName: z.string().min(2, 'Name must be at least 2 characters'),
   phone: z.string().regex(/^(\+233|0)[2-9]\d{8}$/, 'Enter a valid Ghana phone number'),
+  email: z.string().email('Enter a valid email address').optional().or(z.literal('')),
   region: z.string().min(1, 'Select a region'),
   city: z.string().min(1, 'City is required'),
   area: z.string().optional(),
@@ -65,7 +66,7 @@ export default function CheckoutPage({ params }: Props) {
 
   const form = useForm<ShippingFormValues>({
     resolver: zodResolver(shippingSchema),
-    defaultValues: { recipientName: '', phone: '', region: '', city: '', area: '', digitalAddress: '', notes: '' },
+    defaultValues: { recipientName: '', phone: '', email: '', region: '', city: '', area: '', digitalAddress: '', notes: '' },
   });
 
   if (items.length === 0) {
@@ -98,12 +99,20 @@ export default function CheckoutPage({ params }: Props) {
           digitalAddress: values.digitalAddress || undefined,
         },
         notes: values.notes || undefined,
+        email: values.email || undefined,
       });
 
       clearCart();
-      router.push(
-        `/${shopSlug}/checkout/confirmation?orderId=${result.order.id}&orderNumber=${encodeURIComponent(result.order.orderNumber)}`
-      );
+
+      // Redirect to Paystack to complete payment — confirmation page is the callback URL
+      if (result.paymentUrl) {
+        window.location.href = result.paymentUrl;
+      } else {
+        // Fallback: no payment URL (e.g. free order) — go straight to confirmation
+        router.push(
+          `/${shopSlug}/checkout/confirmation?orderId=${result.order.id}&orderNumber=${encodeURIComponent(result.order.orderNumber)}`
+        );
+      }
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
       setError(msg ?? 'Failed to place order. Please try again.');
@@ -148,6 +157,21 @@ export default function CheckoutPage({ params }: Props) {
                   <FormItem>
                     <FormLabel>Phone number</FormLabel>
                     <FormControl><Input placeholder="0244123456" {...field} /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>
+                      Email address{' '}
+                      <span className="text-muted-foreground font-normal">(for payment receipt)</span>
+                    </FormLabel>
+                    <FormControl><Input type="email" placeholder="you@example.com" {...field} /></FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -243,7 +267,7 @@ export default function CheckoutPage({ params }: Props) {
               {error && <p className="text-sm text-destructive">{error}</p>}
 
               <Button type="submit" className="w-full" disabled={submitting}>
-                {submitting ? 'Placing order…' : `Place order · ${formatPrice(subtotal)}`}
+                {submitting ? 'Redirecting to payment…' : `Pay now · ${formatPrice(subtotal)}`}
               </Button>
             </form>
           </Form>

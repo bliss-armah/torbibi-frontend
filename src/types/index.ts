@@ -66,6 +66,12 @@ export interface OrderItem {
   totalPrice: number;
 }
 
+export interface DeliveryInfo {
+  driverPhone?: string;
+  vehicleNumber?: string;
+  notes?: string;
+}
+
 export interface Order {
   id: string;
   orderNumber: string;
@@ -82,6 +88,7 @@ export interface Order {
   paymentReference: string | null;
   shippingAddress: ShippingAddress;
   notes: string | null;
+  deliveryInfo: DeliveryInfo | null;
 }
 
 export type OrderStatus =

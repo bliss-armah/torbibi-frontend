@@ -38,6 +38,8 @@ function ConfirmationContent({ shopSlug }: { shopSlug: string }) {
   const searchParams = useSearchParams();
   const orderId = searchParams.get('orderId');
   const orderNumber = searchParams.get('orderNumber');
+  // Paystack appends ?reference=... to the callback URL after payment
+  const reference = searchParams.get('reference') ?? searchParams.get('trxref');
 
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
@@ -45,11 +47,27 @@ function ConfirmationContent({ shopSlug }: { shopSlug: string }) {
 
   useEffect(() => {
     if (!orderId) { setLoading(false); return; }
-    orderApi.getOne(orderId)
-      .then(setOrder)
-      .catch(() => setError('Could not load order details.'))
-      .finally(() => setLoading(false));
-  }, [orderId]);
+
+    async function load() {
+      try {
+        // If Paystack redirected here with a reference, verify payment first so
+        // the order status updates immediately (before the webhook fires in production,
+        // and as the only mechanism in local dev where webhooks can't reach localhost).
+        if (reference) {
+          await orderApi.verifyPayment(orderId!, reference).then(setOrder).catch(() => {});
+        }
+        // Always fetch the final order state
+        const o = await orderApi.getOne(orderId!);
+        setOrder(o);
+      } catch {
+        setError('Could not load order details.');
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    load();
+  }, [orderId, reference]);
 
   if (!orderId) {
     return (
@@ -67,12 +85,12 @@ function ConfirmationContent({ shopSlug }: { shopSlug: string }) {
       {/* Success header */}
       <div className="text-center mb-8">
         <CheckCircle2 className="h-14 w-14 text-green-500 mx-auto mb-4" />
-        <h1 className="text-2xl font-bold text-foreground">Order placed!</h1>
+        <h1 className="text-2xl font-bold text-foreground">Payment received!</h1>
         {orderNumber && (
           <p className="text-sm text-muted-foreground mt-1">Order #{orderNumber}</p>
         )}
         <p className="text-sm text-muted-foreground mt-2">
-          The seller will confirm your order and contact you about delivery.
+          Your payment was successful. Your order will be confirmed shortly and the seller will be in touch about delivery.
         </p>
       </div>
 

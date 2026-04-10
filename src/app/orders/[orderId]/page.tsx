@@ -137,6 +137,32 @@ function OrderDetail({ orderId }: { orderId: string }) {
             )}
           </div>
 
+          {/* Delivery info — shown when shop has added driver/vehicle details */}
+          {order.deliveryInfo && (order.deliveryInfo.driverPhone || order.deliveryInfo.vehicleNumber) && (
+            <>
+              <Separator />
+              <div>
+                <p className="text-sm font-medium text-foreground mb-2">Delivery details</p>
+                {order.deliveryInfo.driverPhone && (
+                  <p className="text-sm text-muted-foreground">
+                    Driver phone:{' '}
+                    <a
+                      href={`tel:${order.deliveryInfo.driverPhone}`}
+                      className="text-primary font-medium hover:underline"
+                    >
+                      {order.deliveryInfo.driverPhone}
+                    </a>
+                  </p>
+                )}
+                {order.deliveryInfo.vehicleNumber && (
+                  <p className="text-sm text-muted-foreground">
+                    Vehicle: <span className="font-medium text-foreground">{order.deliveryInfo.vehicleNumber}</span>
+                  </p>
+                )}
+              </div>
+            </>
+          )}
+
           {order.notes && (
             <>
               <Separator />

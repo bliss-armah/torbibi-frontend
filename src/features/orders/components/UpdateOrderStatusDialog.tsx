@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { orderApi } from '@/lib/api/order.api';
 import { Order } from '@/types';
 import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
 import {
   Dialog,
   DialogContent,
@@ -19,21 +20,20 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 
-type OrderStatus = 'confirmed' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
+type NextStatus = 'processing' | 'shipped' | 'delivered' | 'cancelled';
 
-// Valid next statuses from each current status
-const NEXT_STATUSES: Record<string, OrderStatus[]> = {
-  pending:    ['confirmed', 'cancelled'],
+// 'confirmed' is set automatically on payment — not a manual option
+const NEXT_STATUSES: Record<string, NextStatus[]> = {
+  pending:    ['cancelled'],
   confirmed:  ['processing', 'cancelled'],
   processing: ['shipped', 'cancelled'],
-  shipped:    ['delivered', 'cancelled'],
+  shipped:    ['delivered'],
   delivered:  [],
   cancelled:  [],
   refunded:   [],
 };
 
 const STATUS_LABEL: Record<string, string> = {
-  confirmed:  'Confirmed',
   processing: 'Processing',
   shipped:    'Shipped',
   delivered:  'Delivered',
@@ -56,8 +56,10 @@ export function UpdateOrderStatusDialog({
   onSuccess,
 }: UpdateOrderStatusDialogProps) {
   const nextStatuses = NEXT_STATUSES[order.status] ?? [];
-  const [status, setStatus] = useState<OrderStatus | ''>('');
+  const [status, setStatus] = useState<NextStatus | ''>('');
   const [cancelReason, setCancelReason] = useState('');
+  const [driverPhone, setDriverPhone] = useState('');
+  const [vehicleNumber, setVehicleNumber] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
@@ -65,10 +67,14 @@ export function UpdateOrderStatusDialog({
     if (!next) {
       setStatus('');
       setCancelReason('');
+      setDriverPhone('');
+      setVehicleNumber('');
       setError('');
     }
     onOpenChange(next);
   }
+
+  const showDeliveryFields = status === 'processing' || status === 'shipped';
 
   async function handleSubmit() {
     if (!status) { setError('Select a status'); return; }
@@ -79,11 +85,17 @@ export function UpdateOrderStatusDialog({
     setError('');
     setSubmitting(true);
     try {
+      const deliveryInfo =
+        showDeliveryFields && (driverPhone.trim() || vehicleNumber.trim())
+          ? { driverPhone: driverPhone.trim() || undefined, vehicleNumber: vehicleNumber.trim() || undefined }
+          : undefined;
+
       const updated = await orderApi.updateStatus(
         shopId,
         order.id,
         status,
-        status === 'cancelled' ? cancelReason.trim() : undefined
+        status === 'cancelled' ? cancelReason.trim() : undefined,
+        deliveryInfo,
       );
       handleOpenChange(false);
       onSuccess(updated);
@@ -115,11 +127,12 @@ export function UpdateOrderStatusDialog({
           </p>
         ) : (
           <div className="space-y-4">
+            {/* Status select */}
             <div className="space-y-1.5">
               <label className="text-sm font-medium">New status</label>
               <Select
                 value={status}
-                onValueChange={(v) => { setStatus(v as OrderStatus); setError(''); }}
+                onValueChange={(v) => { setStatus(v as NextStatus); setError(''); }}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select new status…" />
@@ -134,6 +147,33 @@ export function UpdateOrderStatusDialog({
               </Select>
             </div>
 
+            {/* Delivery info (processing / shipped) */}
+            {showDeliveryFields && (
+              <div className="space-y-3 rounded-lg border border-border bg-muted/30 p-3">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  Delivery details <span className="normal-case font-normal">(optional)</span>
+                </p>
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium">Driver phone</label>
+                  <Input
+                    type="tel"
+                    placeholder="e.g. 0241234567"
+                    value={driverPhone}
+                    onChange={(e) => setDriverPhone(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium">Vehicle / plate number</label>
+                  <Input
+                    placeholder="e.g. GR-1234-24"
+                    value={vehicleNumber}
+                    onChange={(e) => setVehicleNumber(e.target.value)}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Cancel reason */}
             {status === 'cancelled' && (
               <div className="space-y-1.5">
                 <label className="text-sm font-medium">
@@ -155,7 +195,7 @@ export function UpdateOrderStatusDialog({
 
         <DialogFooter>
           <Button variant="outline" onClick={() => handleOpenChange(false)} disabled={submitting}>
-            Cancel
+            Close
           </Button>
           {nextStatuses.length > 0 && (
             <Button onClick={handleSubmit} disabled={submitting || !status}>
