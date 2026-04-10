@@ -3,45 +3,52 @@ import { ApiResponse } from '@/types';
 
 export type MomoNetwork = 'MTN' | 'ATL' | 'VOD';
 
-export interface MobileMoneyRecipient {
+export interface MobileMoneySubaccount {
   type: 'mobile_money';
   accountName: string;
   accountNumber: string;
   bankCode: MomoNetwork;
 }
 
-export interface GhipssRecipient {
+export interface GhipssSubaccount {
   type: 'ghipss';
   accountName: string;
   accountNumber: string;
   bankCode: string;
 }
 
-export type RegisterRecipientPayload = MobileMoneyRecipient | GhipssRecipient;
+export type RegisterSubaccountPayload = MobileMoneySubaccount | GhipssSubaccount;
 
-export interface TransferRecipient {
-  id: string;
-  shopId: string;
+export interface SubaccountResult {
+  subaccountCode: string;
+  businessName: string;
+  accountNumber: string;
+  settlementBank: string;
   type: string;
   accountName: string;
-  accountNumber: string;
-  bankCode: string;
-  paystackRecipientCode: string | null;
+}
+
+export interface SubaccountDetails {
+  subaccountCode: string | null;
+  type: string | null;
+  accountName: string | null;
+  accountNumber: string | null;
+  bankCode: string | null;
 }
 
 export const paymentApi = {
-  registerRecipient: (shopId: string, payload: RegisterRecipientPayload) =>
+  registerSubaccount: (shopId: string, payload: RegisterSubaccountPayload) =>
     apiClient
-      .post<ApiResponse<{ recipient: TransferRecipient }>>(
-        `/payments/recipients/shop/${shopId}`,
+      .post<ApiResponse<{ subaccount: SubaccountResult }>>(
+        `/payments/subaccount/shop/${shopId}`,
         payload
       )
-      .then((r) => r.data.data.recipient),
+      .then((r) => r.data.data.subaccount),
 
-  getRecipient: (shopId: string) =>
+  getSubaccount: (shopId: string) =>
     apiClient
-      .get<ApiResponse<{ recipient: TransferRecipient | null }>>(
-        `/payments/recipients/shop/${shopId}`
+      .get<ApiResponse<SubaccountDetails>>(
+        `/payments/subaccount/shop/${shopId}`
       )
-      .then((r) => r.data.data.recipient),
+      .then((r) => r.data.data),
 };

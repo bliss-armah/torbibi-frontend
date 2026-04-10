@@ -6,6 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { shopApi } from '@/lib/api/shop.api';
 import { paymentApi, MomoNetwork } from '@/lib/api/payment.api';
+import { subscriptionApi, SubscriptionStatus, SubscriptionStatusDetails } from '@/lib/api/subscription.api';
 import { Shop } from '@/types';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -67,6 +68,95 @@ const payoutSchema = z
 type ShopDetailsValues = z.infer<typeof shopDetailsSchema>;
 type PayoutValues = z.infer<typeof payoutSchema>;
 
+// ─── Subscription card ────────────────────────────────────────────────────────
+
+function SubscriptionCard({
+  subscription,
+  subscribing,
+  onSubscribe,
+  onCancel,
+}: {
+  subscription: SubscriptionStatusDetails | null;
+  subscribing: boolean;
+  onSubscribe: () => void;
+  onCancel: () => void;
+}) {
+  const status: SubscriptionStatus = subscription?.subscriptionStatus ?? 'trialing';
+
+  const trialDaysLeft = subscription?.trialEndsAt
+    ? Math.max(0, Math.ceil((new Date(subscription.trialEndsAt).getTime() - Date.now()) / 86400000))
+    : null;
+
+  const nextBilling = subscription?.currentPeriodEnd
+    ? new Date(subscription.currentPeriodEnd).toLocaleDateString('en-GH', {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+      })
+    : null;
+
+  if (status === 'active') {
+    return (
+      <div className="space-y-2">
+        <div className="flex items-center gap-2">
+          <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800">
+            Active
+          </span>
+          {nextBilling && (
+            <span className="text-sm text-muted-foreground">Next billing: {nextBilling}</span>
+          )}
+        </div>
+        <button
+          onClick={onCancel}
+          className="text-sm text-destructive underline-offset-2 hover:underline"
+        >
+          Cancel subscription
+        </button>
+      </div>
+    );
+  }
+
+  if (status === 'trialing') {
+    return (
+      <div className="space-y-3">
+        <div className="rounded-md bg-blue-50 border border-blue-200 px-4 py-3 text-sm text-blue-800">
+          {trialDaysLeft !== null && trialDaysLeft > 0
+            ? `Free trial — ${trialDaysLeft} day${trialDaysLeft === 1 ? '' : 's'} remaining. Subscribe before your trial ends to keep your shop active.`
+            : 'Your free trial has expired. Subscribe to reactivate your storefront.'}
+        </div>
+        <Button onClick={onSubscribe} disabled={subscribing}>
+          {subscribing ? 'Redirecting…' : 'Subscribe — GHS 50/month'}
+        </Button>
+      </div>
+    );
+  }
+
+  if (status === 'past_due') {
+    return (
+      <div className="space-y-3">
+        <div className="rounded-md bg-yellow-50 border border-yellow-200 px-4 py-3 text-sm text-yellow-800">
+          Your last payment failed. Subscribe again to restore access.
+        </div>
+        <Button onClick={onSubscribe} disabled={subscribing}>
+          {subscribing ? 'Redirecting…' : 'Retry subscription'}
+        </Button>
+      </div>
+    );
+  }
+
+  // cancelled
+  return (
+    <div className="space-y-3">
+      <div className="rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800">
+        Your subscription is cancelled. Your storefront is suspended.
+      </div>
+      <Button onClick={onSubscribe} disabled={subscribing}>
+        {subscribing ? 'Redirecting…' : 'Reactivate — GHS 50/month'}
+      </Button>
+    </div>
+  );
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function SettingsPage() {
@@ -74,6 +164,10 @@ export default function SettingsPage() {
   const [loadingState, setLoadingState] = useState<'loading' | 'ready' | 'no-shop' | 'error'>(
     'loading'
   );
+  const [subaccountCode, setSubaccountCode] = useState<string | null>(null);
+  const [payoutSaved, setPayoutSaved] = useState(false);
+  const [subscription, setSubscription] = useState<SubscriptionStatusDetails | null>(null);
+  const [subscribing, setSubscribing] = useState(false);
 
   // Shop details form
   const shopForm = useForm<ShopDetailsValues>({
@@ -101,15 +195,22 @@ export default function SettingsPage() {
         setShop(s);
         shopForm.reset({ name: s.name, description: s.description ?? '', phone: s.phone });
 
-        const recipient = await paymentApi.getRecipient(s.id).catch(() => null);
-        if (recipient) {
+        const [subaccount, sub] = await Promise.all([
+          paymentApi.getSubaccount(s.id).catch(() => null),
+          subscriptionApi.getStatus(s.id).catch(() => null),
+        ]);
+
+        if (subaccount?.subaccountCode) {
+          setSubaccountCode(subaccount.subaccountCode);
           payoutForm.reset({
-            type: recipient.type as 'mobile_money' | 'ghipss',
-            accountName: recipient.accountName,
-            accountNumber: recipient.accountNumber,
-            bankCode: recipient.bankCode,
+            type: (subaccount.type as 'mobile_money' | 'ghipss') ?? 'mobile_money',
+            accountName: subaccount.accountName ?? '',
+            accountNumber: subaccount.accountNumber ?? '',
+            bankCode: subaccount.bankCode ?? 'MTN',
           });
         }
+
+        if (sub) setSubscription(sub);
 
         setLoadingState('ready');
       } catch {
@@ -125,7 +226,7 @@ export default function SettingsPage() {
     try {
       const updated = await shopApi.update(shop.id, values);
       setShop(updated);
-      shopForm.reset(values); // clears isDirty; isSubmitSuccessful stays true briefly
+      shopForm.reset(values);
     } catch (err: unknown) {
       const msg =
         (err as { message?: string })?.message ?? 'Failed to save. Please try again.';
@@ -136,17 +237,40 @@ export default function SettingsPage() {
   async function onSavePayout(values: PayoutValues) {
     if (!shop) return;
     try {
-      await paymentApi.registerRecipient(shop.id, {
+      const result = await paymentApi.registerSubaccount(shop.id, {
         type: values.type,
         accountName: values.accountName,
         accountNumber: values.accountNumber,
         bankCode: values.bankCode as MomoNetwork,
       });
+      setSubaccountCode(result.subaccountCode);
+      setPayoutSaved(true);
       payoutForm.reset(values);
     } catch (err: unknown) {
       const msg =
         (err as { message?: string })?.message ?? 'Failed to save. Please try again.';
       payoutForm.setError('root', { message: msg });
+    }
+  }
+
+  async function onSubscribe() {
+    if (!shop) return;
+    setSubscribing(true);
+    try {
+      const result = await subscriptionApi.subscribe(shop.id);
+      window.location.href = result.authorizationUrl;
+    } catch {
+      setSubscribing(false);
+    }
+  }
+
+  async function onCancelSubscription() {
+    if (!shop || !window.confirm('Cancel your subscription? Your storefront will be suspended.')) return;
+    try {
+      await subscriptionApi.cancel(shop.id);
+      setSubscription((prev) => prev ? { ...prev, subscriptionStatus: 'cancelled' } : prev);
+    } catch {
+      // silently fail — let user retry
     }
   }
 
@@ -268,16 +392,44 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
 
+        {/* ── Subscription ──────────────────────────────────────────────────── */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Subscription</CardTitle>
+            <CardDescription>
+              Your monthly platform subscription keeps your storefront active.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <SubscriptionCard
+              subscription={subscription}
+              subscribing={subscribing}
+              onSubscribe={onSubscribe}
+              onCancel={onCancelSubscription}
+            />
+          </CardContent>
+        </Card>
+
         {/* ── Payout account ────────────────────────────────────────────────── */}
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Payout account</CardTitle>
             <CardDescription>
-              Where we send your earnings after each sale. Torbibi retains a small platform
-              commission.
+              Register your mobile money or bank account. Paystack will split every payment
+              automatically — your share arrives directly without waiting for manual transfers.
             </CardDescription>
           </CardHeader>
           <CardContent>
+            {subaccountCode && !payoutSaved && (
+              <div className="mb-4 rounded-md bg-green-50 px-4 py-3 text-sm text-green-800 border border-green-200">
+                Payout account registered. Your earnings are split automatically on each sale.
+              </div>
+            )}
+            {payoutSaved && (
+              <div className="mb-4 rounded-md bg-green-50 px-4 py-3 text-sm text-green-800 border border-green-200">
+                Payout account updated successfully.
+              </div>
+            )}
             <Form {...payoutForm}>
               <form
                 onSubmit={payoutForm.handleSubmit(onSavePayout)}
@@ -391,7 +543,11 @@ export default function SettingsPage() {
                 />
 
                 <Button type="submit" disabled={payoutForm.formState.isSubmitting}>
-                  {payoutForm.formState.isSubmitting ? 'Saving…' : 'Save payout account'}
+                  {payoutForm.formState.isSubmitting
+                    ? 'Saving…'
+                    : subaccountCode
+                    ? 'Update payout account'
+                    : 'Register payout account'}
                 </Button>
 
                 {payoutForm.formState.errors.root && (
