@@ -19,6 +19,7 @@ export interface Shop {
   description: string | null;
   logoUrl: string | null;
   bannerUrl: string | null;
+  brandColor: string | null;
   phone: string;
   email: string | null;
   address: ShopAddress | null;

@@ -19,6 +19,10 @@ export interface CreateShopPayload {
   };
 }
 
+export interface UpdateShopPayload extends Partial<CreateShopPayload> {
+  brandColor?: string | null;
+}
+
 export const shopApi = {
   listPublic: (params?: PublicShopsParams) =>
     apiClient
@@ -40,8 +44,32 @@ export const shopApi = {
       .get<ApiResponse<{ shops: Shop[] }>>('/shops/my/shops')
       .then((r) => r.data.data.shops),
 
-  update: (shopId: string, payload: Partial<CreateShopPayload>) =>
+  update: (shopId: string, payload: UpdateShopPayload) =>
     apiClient
       .patch<ApiResponse<{ shop: Shop }>>(`/shops/${shopId}`, payload)
       .then((r) => r.data.data.shop),
+
+  uploadLogo: (shopId: string, file: File) => {
+    const formData = new FormData();
+    formData.append('logo', file);
+    return apiClient
+      .patch<ApiResponse<{ logoUrl: string; publicId: string }>>(
+        `/shops/${shopId}/logo`,
+        formData,
+        { headers: { 'Content-Type': undefined } }
+      )
+      .then((r) => r.data.data);
+  },
+
+  uploadBanner: (shopId: string, file: File) => {
+    const formData = new FormData();
+    formData.append('banner', file);
+    return apiClient
+      .patch<ApiResponse<{ bannerUrl: string; publicId: string }>>(
+        `/shops/${shopId}/banner`,
+        formData,
+        { headers: { 'Content-Type': undefined } }
+      )
+      .then((r) => r.data.data);
+  },
 };

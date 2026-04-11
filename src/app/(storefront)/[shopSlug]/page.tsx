@@ -84,6 +84,8 @@ export default async function ShopStorefrontPage({ params, searchParams }: Props
     .slice(0, 2)
     .toUpperCase();
 
+  const brandColor = shop.brandColor ?? '#F59E0B';
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Shop header */}
@@ -99,7 +101,12 @@ export default async function ShopStorefrontPage({ params, searchParams }: Props
               priority
             />
           ) : (
-            <div className="h-full w-full bg-gradient-to-br from-amber-400 via-amber-500 to-orange-500" />
+            <div
+              className="h-full w-full"
+              style={{
+                background: `linear-gradient(135deg, ${brandColor}cc 0%, ${brandColor} 100%)`,
+              }}
+            />
           )}
         </div>
 
@@ -111,8 +118,11 @@ export default async function ShopStorefrontPage({ params, searchParams }: Props
               {shop.logoUrl ? (
                 <Image src={shop.logoUrl} alt={shop.name} fill className="object-cover" />
               ) : (
-                <div className="h-full w-full flex items-center justify-center bg-amber-50">
-                  <span className="text-lg font-bold text-amber-600">{initials}</span>
+                <div
+                  className="h-full w-full flex items-center justify-center"
+                  style={{ backgroundColor: `${brandColor}22` }}
+                >
+                  <span className="text-lg font-bold" style={{ color: brandColor }}>{initials}</span>
                 </div>
               )}
             </div>

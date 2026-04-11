@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -28,6 +28,20 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
+import { Camera, Upload } from 'lucide-react';
+
+const BRAND_COLOR_PRESETS = [
+  '#F59E0B', // amber
+  '#F97316', // orange
+  '#EF4444', // red
+  '#EC4899', // pink
+  '#8B5CF6', // violet
+  '#3B82F6', // blue
+  '#14B8A6', // teal
+  '#10B981', // emerald
+  '#64748B', // slate
+  '#111827', // near-black
+];
 
 // ─── Schemas ──────────────────────────────────────────────────────────────────
 
@@ -168,6 +182,13 @@ export default function SettingsPage() {
   const [payoutSaved, setPayoutSaved] = useState(false);
   const [subscription, setSubscription] = useState<SubscriptionStatusDetails | null>(null);
   const [subscribing, setSubscribing] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [uploadingBanner, setUploadingBanner] = useState(false);
+  const [brandColor, setBrandColor] = useState<string>('#F59E0B');
+  const [savingColor, setSavingColor] = useState(false);
+  const [colorHex, setColorHex] = useState<string>('F59E0B');
+  const logoInputRef = useRef<HTMLInputElement>(null);
+  const bannerInputRef = useRef<HTMLInputElement>(null);
 
   // Shop details form
   const shopForm = useForm<ShopDetailsValues>({
@@ -194,6 +215,9 @@ export default function SettingsPage() {
         }
         setShop(s);
         shopForm.reset({ name: s.name, description: s.description ?? '', phone: s.phone });
+        const initialColor = s.brandColor ?? '#F59E0B';
+        setBrandColor(initialColor);
+        setColorHex(initialColor.replace('#', ''));
 
         const [subaccount, sub] = await Promise.all([
           paymentApi.getSubaccount(s.id).catch(() => null),
@@ -220,6 +244,49 @@ export default function SettingsPage() {
     load();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  async function handleLogoUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file || !shop) return;
+    setUploadingLogo(true);
+    try {
+      const result = await shopApi.uploadLogo(shop.id, file);
+      setShop((prev) => prev ? { ...prev, logoUrl: result.logoUrl } : prev);
+    } catch {
+      // upload failure is non-blocking — user can retry
+    } finally {
+      setUploadingLogo(false);
+      e.target.value = '';
+    }
+  }
+
+  async function handleBannerUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file || !shop) return;
+    setUploadingBanner(true);
+    try {
+      const result = await shopApi.uploadBanner(shop.id, file);
+      setShop((prev) => prev ? { ...prev, bannerUrl: result.bannerUrl } : prev);
+    } catch {
+      // upload failure is non-blocking — user can retry
+    } finally {
+      setUploadingBanner(false);
+      e.target.value = '';
+    }
+  }
+
+  async function handleSaveBrandColor() {
+    if (!shop) return;
+    setSavingColor(true);
+    try {
+      await shopApi.update(shop.id, { brandColor });
+      setShop((prev) => (prev ? { ...prev, brandColor } : prev));
+    } catch {
+      // silently fail — user can retry
+    } finally {
+      setSavingColor(false);
+    }
+  }
 
   async function onSaveShopDetails(values: ShopDetailsValues) {
     if (!shop) return;
@@ -330,6 +397,9 @@ export default function SettingsPage() {
     );
   }
 
+  // Narrow shop to non-null — at this point loadingState === 'ready' which guarantees shop is set
+  if (!shop) return null;
+
   return (
     <div className="p-6">
       <h1 className="mb-6 text-2xl font-bold text-foreground">Settings</h1>
@@ -337,6 +407,191 @@ export default function SettingsPage() {
       <div className="grid gap-6 lg:grid-cols-3">
         {/* ── Left column: primary forms ──────────────────────────────────── */}
         <div className="space-y-6 lg:col-span-2">
+          {/* Shop appearance */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Shop appearance</CardTitle>
+              <CardDescription>
+                Your logo and banner are shown on your public storefront. The banner fills the top of the page; the logo appears overlapping it.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              {/* Banner */}
+              <div>
+                <p className="mb-2 text-sm font-medium text-foreground">Banner</p>
+                <div
+                  className="group relative h-28 cursor-pointer overflow-hidden rounded-lg"
+                  onClick={() => !uploadingBanner && bannerInputRef.current?.click()}
+                >
+                  {shop.bannerUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={shop.bannerUrl} alt="Shop banner" className="h-full w-full object-cover" />
+                  ) : (
+                    <div className="h-full w-full bg-gradient-to-br from-amber-400 via-amber-500 to-orange-500" />
+                  )}
+                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 bg-black/30 opacity-0 transition-opacity group-hover:opacity-100">
+                    <Upload className="h-5 w-5 text-white" />
+                    <span className="text-xs font-medium text-white">
+                      {shop.bannerUrl ? 'Change banner' : 'Upload banner'}
+                    </span>
+                  </div>
+                  {uploadingBanner && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+                      <span className="text-sm font-medium text-white">Uploading…</span>
+                    </div>
+                  )}
+                </div>
+                <p className="mt-1.5 text-xs text-muted-foreground">
+                  Recommended: 1200 × 400 px. JPEG, PNG or WebP, max 5 MB.
+                </p>
+              </div>
+
+              {/* Logo */}
+              <div>
+                <p className="mb-2 text-sm font-medium text-foreground">Logo</p>
+                <div className="flex items-center gap-4">
+                  <div
+                    className="group relative h-16 w-16 flex-shrink-0 cursor-pointer overflow-hidden rounded-full border-2 border-border bg-amber-50"
+                    onClick={() => !uploadingLogo && logoInputRef.current?.click()}
+                  >
+                    {shop.logoUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={shop.logoUrl} alt="Shop logo" className="h-full w-full object-cover" />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center">
+                        <span className="text-xl font-bold text-amber-600">
+                          {shop.name.trim().split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase()}
+                        </span>
+                      </div>
+                    )}
+                    <div className="absolute inset-0 flex items-center justify-center rounded-full bg-black/30 opacity-0 transition-opacity group-hover:opacity-100">
+                      {uploadingLogo ? (
+                        <span className="text-[10px] font-medium text-white">…</span>
+                      ) : (
+                        <Camera className="h-4 w-4 text-white" />
+                      )}
+                    </div>
+                  </div>
+                  <div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={uploadingLogo}
+                      onClick={() => logoInputRef.current?.click()}
+                    >
+                      {uploadingLogo ? 'Uploading…' : shop.logoUrl ? 'Change logo' : 'Upload logo'}
+                    </Button>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Recommended: 400 × 400 px. Displays as a circle.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Brand color */}
+              <div>
+                <p className="mb-1 text-sm font-medium text-foreground">Brand color</p>
+                <p className="mb-3 text-xs text-muted-foreground">
+                  Used for your storefront banner and accents when no custom banner is uploaded.
+                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  {BRAND_COLOR_PRESETS.map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      title={preset}
+                      className={cn(
+                        'h-7 w-7 rounded-full border-2 transition-all hover:scale-110 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1',
+                        brandColor.toLowerCase() === preset.toLowerCase()
+                          ? 'border-foreground scale-110 shadow-sm'
+                          : 'border-transparent'
+                      )}
+                      style={{ backgroundColor: preset }}
+                      onClick={() => {
+                        setBrandColor(preset);
+                        setColorHex(preset.replace('#', ''));
+                      }}
+                    />
+                  ))}
+                  {/* Native color picker for any custom color */}
+                  <div className="relative">
+                    <input
+                      type="color"
+                      value={brandColor}
+                      onChange={(e) => {
+                        setBrandColor(e.target.value);
+                        setColorHex(e.target.value.replace('#', ''));
+                      }}
+                      className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                      title="Custom color"
+                    />
+                    <div
+                      className={cn(
+                        'flex h-7 w-7 cursor-pointer items-center justify-center rounded-full border-2 text-[10px] font-bold',
+                        !BRAND_COLOR_PRESETS.map((p) => p.toLowerCase()).includes(brandColor.toLowerCase())
+                          ? 'border-foreground scale-110 shadow-sm'
+                          : 'border-dashed border-border'
+                      )}
+                      style={{ backgroundColor: brandColor }}
+                      title="Custom color"
+                    >
+                      <span className="sr-only">Custom</span>
+                    </div>
+                  </div>
+                  {/* Hex input */}
+                  <div className="flex items-center gap-0.5 rounded-md border border-input bg-background px-2 py-1">
+                    <span className="text-xs text-muted-foreground">#</span>
+                    <input
+                      type="text"
+                      value={colorHex}
+                      onChange={(e) => {
+                        const raw = e.target.value.replace(/[^0-9A-Fa-f]/g, '').slice(0, 6);
+                        setColorHex(raw);
+                        if (raw.length === 6) setBrandColor(`#${raw}`);
+                      }}
+                      className="w-16 bg-transparent font-mono text-xs focus:outline-none"
+                      placeholder="F59E0B"
+                      maxLength={6}
+                    />
+                  </div>
+                </div>
+                <div className="mt-3 flex items-center gap-3">
+                  {/* Preview swatch */}
+                  <div
+                    className="h-8 w-20 rounded-md border border-border"
+                    style={{ backgroundColor: brandColor }}
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={savingColor}
+                    onClick={handleSaveBrandColor}
+                  >
+                    {savingColor ? 'Saving…' : 'Save color'}
+                  </Button>
+                </div>
+              </div>
+
+              {/* Hidden file inputs */}
+              <input
+                ref={logoInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                className="sr-only"
+                onChange={handleLogoUpload}
+              />
+              <input
+                ref={bannerInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                className="sr-only"
+                onChange={handleBannerUpload}
+              />
+            </CardContent>
+          </Card>
+
           {/* Shop details */}
           <Card>
             <CardHeader>
