@@ -25,7 +25,7 @@ export const orderApi = {
       .get<ApiResponse<{ order: Order }>>(`/orders/${orderId}`)
       .then((r) => r.data.data.order),
 
-  listForShop: (shopId: string, params?: { page?: number; status?: string }) =>
+  listForShop: (shopId: string, params?: { page?: number; limit?: number; status?: string }) =>
     apiClient
       .get<ApiResponse<PaginatedResponse<Order>>>(`/orders/shop/${shopId}/list`, { params })
       .then((r) => r.data.data),

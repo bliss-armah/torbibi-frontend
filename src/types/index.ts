@@ -89,6 +89,8 @@ export interface Order {
   shippingAddress: ShippingAddress;
   notes: string | null;
   deliveryInfo: DeliveryInfo | null;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export type OrderStatus =
